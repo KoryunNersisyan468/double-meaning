@@ -6,29 +6,50 @@ export default function AdminDashboard() {
   const [logs, setLogs] = useState([]);
   const [revealedLogs, setRevealedLogs] = useState([]);
   // Добавь состояние для индекса вопроса у админа
-const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const groupedByQuestion = useMemo(() => {
+    const groups = [];
 
-const handleReveal = async () => {
-  // 1. Раскрываем карты (начисляются очки)
-  const allIds = logs.map((l) => l.id);
-  setRevealedLogs(allIds);
+    logs.forEach((log) => {
+      // Ищем, есть ли уже группа с таким текстом вопроса
+      let group = groups.find((g) => g.text === log.question_text);
 
-  // 2. Ждем 4 секунды, чтобы все увидели результат
-  setTimeout(async () => {
-    const nextIdx = currentQuestionIndex + 1;
-    
-    try {
-      // 3. Отправляем сигнал командам переключиться
-      await API.post("/game/next-question", { nextIndex: nextIdx });
-      
-      // 4. Сбрасываем локальное состояние для нового раунда
-      setCurrentQuestionIndex(nextIdx);
-      
-    } catch (err) {
-      console.error("Ошибка авто-переключения:", err);
-    }
-  }, 1000); // 1000 миллисекунд = 1 секунды
-};
+      if (!group) {
+        // Если группы нет, создаем её и сохраняем, какая команда была первой
+        group = {
+          text: log.question_text,
+          team_name: log.team_name, // Записывает команду, создавшую этот вопрос в логах
+        };
+        groups.push(group);
+      }
+
+      // Раскладываем логи по командам внутри этой группы для истории
+    });
+
+    // Возвращаем перевернутый массив, чтобы последний вопрос был сверху
+    return [...groups].reverse().slice(0, 2);
+  }, [logs]);
+  console.log(groupedByQuestion);
+  const handleReveal = async () => {
+    // 1. Раскрываем карты (начисляются очки)
+    const allIds = logs.map((l) => l.id);
+    setRevealedLogs(allIds);
+
+    // 2. Ждем 4 секунды, чтобы все увидели результат
+    setTimeout(async () => {
+      const nextIdx = currentQuestionIndex + 1;
+
+      try {
+        // 3. Отправляем сигнал командам переключиться
+        await API.post("/game/next-question", { nextIndex: nextIdx });
+
+        // 4. Сбрасываем локальное состояние для нового раунда
+        setCurrentQuestionIndex(nextIdx);
+      } catch (err) {
+        console.error("Ошибка авто-переключения:", err);
+      }
+    }, 1000); // 1000 миллисекунд = 1 секунды
+  };
 
   // 1. ЛОГИКА ОЧКОВ: Теперь это вычисляемое значение
   // Очки считаются только если ответ правильный И его ID есть в списке раскрытых
@@ -133,7 +154,7 @@ const handleReveal = async () => {
         ՆՈՐԻՑ ՍԿՍԵԼ ԽԱՂԸ
       </button>
 
-      <div className="w-full max-w-6xl flex justify-around p-3 md:p-4 bg-slate-900/80 rounded-2xl md:rounded-[3rem] border border-slate-800 mb-5 md:mb-7 backdrop-blur-sm">
+      <div className="w-full max-w-6xl flex justify-around p-3 md:p-4 bg-slate-900/80 rounded-2xl md:rounded-[3rem] border border-slate-800 mb-3 md:mb-5 backdrop-blur-sm">
         <div className="text-center">
           <p className="text-yellow-500 text-[10px] md:text-sm font-bold uppercase mb-1">
             Թիմ 1
@@ -145,6 +166,22 @@ const handleReveal = async () => {
             Թիմ 2
           </p>
           <div className="text-3xl md:text-5xl font-black">{scores.teamB}</div>
+        </div>
+      </div>
+      <div className="w-full max-w-360 flex flex-col p-6 md:p-7 bg-slate-900/80 rounded-2xl md:rounded-[3rem] border border-slate-800 mb-8 backdrop-blur-sm relative shadow-2xl">
+        <div className="text-blue-500 text-[10px] md:text-xs font-black uppercase tracking-[0.3em] mb-1 opacity-70">
+          Ընթացիկ Հարց
+        </div>
+        <div className="flex items-center gap-5 justify-between w-full">
+          <h2 className="text-lg md:text-xl font-black text-center italic leading-tight flex-1">
+            {groupedByQuestion.find((q) => q.team_name === "teamA")?.text ||
+              "Սպասում ենք հարցին..."}
+          </h2>
+
+          <h2 className="text-lg md:text-xl font-black text-center italic leading-tight flex-1">
+            {groupedByQuestion.find((q) => q.team_name === "teamB")?.text ||
+              "Սպասում ենք հարցին..."}
+          </h2>
         </div>
       </div>
 
@@ -175,9 +212,14 @@ const handleReveal = async () => {
                   className={`shrink-0 mx-1 md:mx-2 p-1 md:p-2 rounded-lg md:rounded-full border-2 md:border-4 flex items-center justify-center transition-all duration-500 z-10 ${bothCorrect ? "bg-green-500 border-green-300 scale-105 md:scale-110" : "bg-slate-900 border-slate-800"}`}
                 >
                   <span className="text-[8px] uppercase md:text-base font-bold whitespace-nowrap">
-                    {bothCorrect
-                      ? pair.a.selected_word.split(" ")[0]
-                      : "Բառերը համանուն չեն"}
+                    {revealedLogs.includes(pair.a.id) &&
+                    revealedLogs.includes(pair.b.id)
+                      ?
+                        bothCorrect
+                        ? pair.a.selected_word.split(" ")[0]
+                        : "Բառերը համանուն չեն"
+                      :
+                        "Սպասում ենք..."}
                   </span>
                 </div>
                 <div
