@@ -1,7 +1,6 @@
 import API from "../api/axiosConfig";
 import { useState, useEffect, useMemo } from "react";
 import { socket } from "../socket";
-import Winner from "../components/Winner";
 
 export default function AdminDashboard() {
   const [logs, setLogs] = useState([]);
@@ -172,7 +171,34 @@ export default function AdminDashboard() {
 
   return (
     <div className="p-2 md:p-4 min-h-screen bg-slate-950 text-white flex flex-col items-center font-mono">
-      {winner && <Winner winner={winner} scores={scores} />}
+      {winner && (
+        <div className="w-full max-w-6xl animate-in zoom-in duration-700 mb-6">
+          <div className="relative overflow-hidden bg-linear-to-r from-blue-600 via-purple-600 to-blue-600 p-0.5 rounded-[2.5rem] shadow-[0_0_50px_rgba(59,130,246,0.5)]">
+            <div className="bg-slate-900 rounded-[2.4rem] p-6 md:p-10 flex flex-col items-center text-center relative overflow-hidden">
+              <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20"></div>
+              <div className="absolute -top-20 -left-20 w-64 h-64 bg-blue-500/20 blur-[100px] animate-pulse"></div>
+              <div className="relative z-10">
+                <span className="text-blue-400 text-xs md:text-sm font-black uppercase tracking-[0.5em] mb-4 block">
+                  Խաղն ավարտված է
+                </span>
+                <h1 className="text-4xl md:text-7xl font-black italic tracking-tighter text-white mb-4 drop-shadow-2xl">
+                  {winner === "Ոչ-ոքի"
+                    ? "🤝 ՈՉ-ՈՔԻ"
+                    : `🏆 ՀԱՂԹՈՂ՝ ${winner.toUpperCase()}`}
+                </h1>
+                <div className="flex gap-4 justify-center mt-6">
+                  <div className="px-6 py-2 bg-white/5 rounded-full border border-white/10 text-slate-400 text-sm">
+                    Վերջնական արդյունքներ:{" "}
+                    <span className="text-white font-bold">
+                      {scores.teamA} - {scores.teamB}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* ГЛАВНЫЙ КОНТЕЙНЕР УПРАВЛЕНИЯ */}
       <div className="w-full max-w-6xl mt-4 mb-10 px-2 md:px-4">
         <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4">
@@ -218,7 +244,7 @@ export default function AdminDashboard() {
           <div className="order-1 md:order-2 flex-1 bg-slate-900/60 backdrop-blur-2xl border border-white/10 rounded-4xl md:rounded-[4rem] p-4 md:p-6 shadow-[0_0_50px_rgba(0,0,0,0.3)] relative overflow-hidden">
             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-1 bg-linear-to-r from-transparent via-blue-500/40 to-transparent"></div>
             <div className="text-[10px] text-slate-500 font-bold uppercase">
-              Հարց {currentQuestionIndex + 1} / {totalQuestions}
+              Հարց {currentQuestionIndex < totalQuestions ? currentQuestionIndex + 1 : totalQuestions} / {totalQuestions}
             </div>
             <div className="flex justify-around items-center">
               <div className="text-center">
