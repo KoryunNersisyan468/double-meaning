@@ -1,14 +1,19 @@
 import API from "../api/axiosConfig";
 import { useState, useEffect, useMemo } from "react";
 import { socket } from "../socket";
+import Winner from "../components/Winner";
 
 export default function AdminDashboard() {
   const [logs, setLogs] = useState([]);
   const [revealedLogs, setRevealedLogs] = useState([]);
-  // Добавь состояние для индекса вопроса у админа
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [totalQuestions, setTotalQuestions] = useState(0);
+  const baseUrl = import.meta.env.BASE_URL || "/";
 
+  const SOUNDS = {
+    SUCCESS: `${baseUrl}sounds/success.mp3`,
+    ERROR: `${baseUrl}sounds/error.mp3`,
+  };
   const groupedByQuestion = useMemo(() => {
     const groups = [];
 
@@ -31,25 +36,51 @@ export default function AdminDashboard() {
     // Возвращаем перевернутый массив, чтобы последний вопрос был сверху
     return [...groups].reverse().slice(0, 2);
   }, [logs]);
+
+  const pairedLogs = useMemo(() => {
+    const teamA = logs.filter((l) => l.team_name === "teamA");
+    const teamB = logs.filter((l) => l.team_name === "teamB");
+    const pairs = [];
+    const minLength = Math.min(teamA.length, teamB.length);
+    for (let i = 0; i < minLength; i++) {
+      pairs.push({ a: teamA[i], b: teamB[i] });
+    }
+    return pairs.reverse();
+  }, [logs]);
+
+  const playSound = (isCorrect) => {
+    const soundPath = isCorrect ? SOUNDS.SUCCESS : SOUNDS.ERROR;
+    const audio = new Audio(soundPath);
+    audio.volume = 0.9; // Громкость 90%
+    audio.play().catch((err) => console.log("Ошибка звука:", err));
+  };
+
   const handleReveal = async () => {
-    // 1. Раскрываем карты (начисляются очки)
+    if (!hasUnrevealedPairs) return;
+
+    // 1. Находим последнюю (самую верхнюю) пару ответов
+    const latestPair = pairedLogs[0]; // Так как у нас .reverse(), индекс 0 - это новые
+
+    // 2. Проверяем, правильно ли ответили ОБЕ команды
+    const isBothCorrect = latestPair.a.is_correct && latestPair.b.is_correct;
+
+    // 3. Раскрываем карты
     const allIds = logs.map((l) => l.id);
     setRevealedLogs(allIds);
 
-    // 2. Ждем 4 секунды, чтобы все увидели результат
+    // 4. ВКЛЮЧАЕМ ЗВУК
+    playSound(isBothCorrect);
+
+    // 5. Переход к следующему вопросу через секунду
     setTimeout(async () => {
       const nextIdx = currentQuestionIndex + 1;
-
       try {
-        // 3. Отправляем сигнал командам переключиться
         await API.post("/game/next-question", { nextIndex: nextIdx });
-
-        // 4. Сбрасываем локальное состояние для нового раунда
         setCurrentQuestionIndex(nextIdx);
       } catch (err) {
         console.error("Ошибка авто-переключения:", err);
       }
-    }, 1000); // 1000 миллисекунд = 1 секунды
+    }, 1000);
   };
 
   // 1. ЛОГИКА ОЧКОВ: Теперь это вычисляемое значение
@@ -97,17 +128,6 @@ export default function AdminDashboard() {
     };
   }, []);
 
-  const pairedLogs = useMemo(() => {
-    const teamA = logs.filter((l) => l.team_name === "teamA");
-    const teamB = logs.filter((l) => l.team_name === "teamB");
-    const pairs = [];
-    const minLength = Math.min(teamA.length, teamB.length);
-    for (let i = 0; i < minLength; i++) {
-      pairs.push({ a: teamA[i], b: teamB[i] });
-    }
-    return pairs.reverse();
-  }, [logs]);
-
   const hasUnrevealedPairs = pairedLogs.some(
     (p) => !revealedLogs.includes(p.a.id) || !revealedLogs.includes(p.b.id),
   );
@@ -148,45 +168,14 @@ export default function AdminDashboard() {
     if (scores.teamA > scores.teamB) return "Թիմ 1";
     if (scores.teamB > scores.teamA) return "Թիմ 2";
     return "Ոչ-ոքի";
-  }, [currentQuestionIndex, totalQuestions, scores,]);
+  }, [currentQuestionIndex, totalQuestions, scores]);
 
   return (
     <div className="p-2 md:p-4 min-h-screen bg-slate-950 text-white flex flex-col items-center font-mono">
-      {winner && (
-        <div className="w-full max-w-6xl animate-in zoom-in duration-700 mb-6">
-          <div className="relative overflow-hidden bg-linear-to-r from-blue-600 via-purple-600 to-blue-600 p-0.5 rounded-[2.5rem] shadow-[0_0_50px_rgba(59,130,246,0.5)]">
-            <div className="bg-slate-900 rounded-[2.4rem] p-6 md:p-10 flex flex-col items-center text-center relative overflow-hidden">
-              {/* Анимированные блики на фоне */}
-              <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20"></div>
-              <div className="absolute -top-20 -left-20 w-64 h-64 bg-blue-500/20 blur-[100px] animate-pulse"></div>
-
-              <div className="relative z-10">
-                <span className="text-blue-400 text-xs md:text-sm font-black uppercase tracking-[0.5em] mb-4 block">
-                  Խաղն ավարտված է
-                </span>
-                <h1 className="text-4xl md:text-7xl font-black italic tracking-tighter text-white mb-4 drop-shadow-2xl">
-                  {winner === "Ոչ-ոքի"
-                    ? "🤝 ՈՉ-ՈՔԻ"
-                    : `🏆 ՀԱՂԹՈՂ՝ ${winner.toUpperCase()}`}
-                </h1>
-                <div className="flex gap-4 justify-center mt-6">
-                  <div className="px-6 py-2 bg-white/5 rounded-full border border-white/10 text-slate-400 text-sm">
-                    Վերջնական արդյունքներ:{" "}
-                    <span className="text-white font-bold">
-                      {scores.teamA} - {scores.teamB}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {winner && <Winner winner={winner} scores={scores} />}
       {/* ГЛАВНЫЙ КОНТЕЙНЕР УПРАВЛЕНИЯ */}
       <div className="w-full max-w-6xl mt-4 mb-10 px-2 md:px-4">
         <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-4">
-          {/* ЛЕВЫЙ БЛОК (Desktop) / Кнопка сброса (Mobile) */}
-          {/* На мобилках этот блок идет вторым в ряду кнопок благодаря md:order */}
           <div className="order-2 md:order-1 flex flex-row md:flex-none gap-2">
             <button
               onClick={resetGame}
@@ -275,6 +264,7 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
+
       <div className="w-full max-w-360 flex flex-col p-6 md:p-7 bg-slate-900/80 rounded-2xl md:rounded-[3rem] border border-slate-800 mb-8 backdrop-blur-sm relative shadow-2xl">
         <div className="text-blue-500 text-[10px] md:text-xs font-black uppercase tracking-[0.3em] mb-1 opacity-70">
           Ընթացիկ Հարց
